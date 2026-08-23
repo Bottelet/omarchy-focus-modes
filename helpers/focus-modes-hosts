@@ -11,6 +11,10 @@
 # trust boundary, the panel is not.
 set -euo pipefail
 
+# Deterministic case-folding and character classes regardless of what
+# survives pkexec's environment scrubbing.
+export LC_ALL=C
+
 HOSTS=/etc/hosts
 BEGIN='# >>> bottelet.focus-modes >>>'
 END='# <<< bottelet.focus-modes <<<'

@@ -47,6 +47,14 @@ The `--clear` path runs on every mode revert and is in the README removal
 section; `grep focus-modes /etc/hosts` is empty after revert, disable and
 uninstall.
 
+**The optional password-less rule is a real trade-off.** By default every
+hosts change re-prompts through polkit. If you install
+`49-focus-modes.rules.example`, any process running as your user can invoke
+the helper silently. The helper's own validation still bounds the damage —
+it can only rewrite its marker block, and can never touch localhost or this
+machine's names — but a hostile local process could then add or remove
+public-domain blocks without a prompt. Install it knowingly or not at all.
+
 ## Untrusted input and where it goes
 
 Mode names, site lists, app classes and theme names are user input; window

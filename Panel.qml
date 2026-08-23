@@ -184,6 +184,21 @@ Panel {
     }
   }
 
+  // Failsafe: if an external step wedges (missing binary, stuck IPC), fail
+  // the transition instead of the whole engine. Generous — the pkexec step
+  // alone may legitimately sit for 120 s waiting on the auth dialog.
+  Timer {
+    interval: 180000
+    running: root.busy
+    onTriggered: {
+      root.addIssue("A step hung — transition aborted; check the journal state")
+      root._steps = []
+      stepProc.cb = null
+      stepProc.running = false
+      root.busy = false
+    }
+  }
+
   // The keep-awake hold: declaratively alive exactly while the shared journal
   // says a keepAwake mode runs — every instance holds its own (inhibits
   // refcount) and drops it when the journal clears, however the mode ended.
@@ -889,6 +904,7 @@ Panel {
 
                   Text {
                     text: modeCard.modelData.icon
+                    textFormat: Text.PlainText
                     anchors.horizontalCenter: parent.horizontalCenter
                     color: modeCard.current ? Color.accent : root.fg
                     font.family: root.fontName
