@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# focus-modes-hosts — the only privileged part of bottelet.focus-modes.
+#
+# Capabilities, in full:
+#   --set d1 d2 ...  replace the plugin's marker block in /etc/hosts with
+#                    0.0.0.0 entries for the given domains (+ www. variants)
+#   --clear          remove the marker block entirely
+#
+# Everything outside the two marker lines is copied through byte-for-byte.
+# Every domain is re-validated here, not just in the UI — this script is the
+# trust boundary, the panel is not.
+set -euo pipefail
+
+HOSTS=/etc/hosts
+BEGIN='# >>> bottelet.focus-modes >>>'
+END='# <<< bottelet.focus-modes <<<'
+MAX_DOMAINS=200
+
+fail() { echo "focus-modes-hosts: $*" >&2; exit 1; }
+
+[[ ${EUID} -eq 0 ]] || fail "must run as root (invoke via pkexec)"
+[[ $# -ge 1 ]] || fail "usage: focus-modes-hosts --set <domain>... | --clear"
+
+mode=$1
+shift
+
+# A block target must look like a public host name and nothing else. Labels
+# are validated one at a time (a single whole-name ERE with nested quantifiers
+# sends glibc's regex engine exponential on long non-matching input), then the
+# checks after reject IP look-alikes, loopback names, mDNS names and this
+# machine's own identity.
+self_names=$(uname -n | tr '[:upper:]' '[:lower:]')
+
+valid_domain() {
+  local d=$1
+  [[ ${#d} -ge 1 && ${#d} -le 253 ]] || return 1
+  [[ $d == *.* && $d != .* && $d != *. && $d != *..* ]] || return 1
+  local rest=$d label
+  while [[ -n $rest ]]; do
+    label=${rest%%.*}
+    if [[ $rest == *.* ]]; then rest=${rest#*.}; else rest=""; fi
+    [[ $label =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || return 1
+  done
+  local tld=${d##*.}
+  [[ $tld =~ [a-z] ]] || return 1            # all-numeric TLD = IPv4 in disguise
+  [[ $d != localhost && $d != *.localhost ]] || return 1
+  [[ $d != *.local && $d != *.localdomain ]] || return 1
+  local name
+  for name in $self_names; do
+    [[ $d != "$name" && $d != *".$name" && "$name" != *".$d" ]] || return 1
+  done
+  return 0
+}
+
+# The marker pair must be absent (0/0) or intact (1/1); anything else means a
+# hand-edited file this script refuses to guess about.
+begin_count=$(grep -cxF -- "$BEGIN" "$HOSTS" || true)
+end_count=$(grep -cxF -- "$END" "$HOSTS" || true)
+if ! { [[ $begin_count -eq 0 && $end_count -eq 0 ]] || [[ $begin_count -eq 1 && $end_count -eq 1 ]]; }; then
+  fail "marker block in $HOSTS is damaged ($begin_count begin / $end_count end lines) — remove the '# >>> bottelet.focus-modes >>>' lines by hand"
+fi
+
+domains=()
+case $mode in
+  --set)
+    [[ $# -ge 1 ]] || fail "--set needs at least one domain"
+    [[ $# -le $MAX_DOMAINS ]] || fail "refusing more than $MAX_DOMAINS domains"
+    # Dedupe on the emitted hostname so `www.x.com` next to `x.com` (which
+    # implies www.x.com) still yields one entry each.
+    declare -A seen=()
+    for raw in "$@"; do
+      d=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
+      valid_domain "$d" || fail "invalid domain: '$raw'"
+      for host in "$d" "www.$d"; do
+        [[ $host == www.www.* ]] && continue
+        [[ -n ${seen[$host]:-} ]] && continue
+        seen[$host]=1
+        domains+=("$host")
+      done
+    done
+    ;;
+  --clear)
+    [[ $# -eq 0 ]] || fail "--clear takes no arguments"
+    ;;
+  *)
+    fail "unknown mode '$mode' (use --set or --clear)"
+    ;;
+esac
+
+# Rebuild the file: everything outside the markers verbatim, then (for --set)
+# a fresh block at the end. Written next to the target and moved into place so
+# a crash can never leave a half-written hosts file.
+tmp=$(mktemp "${HOSTS}.focus-modes.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+awk -v b="$BEGIN" -v e="$END" '$0 == b { skip = 1; next } $0 == e { skip = 0; next } !skip' \
+  "$HOSTS" > "$tmp"
+
+if [[ $mode == --set ]]; then
+  {
+    echo "$BEGIN"
+    for d in "${domains[@]}"; do
+      echo "0.0.0.0 $d"
+    done
+    echo "$END"
+  } >> "$tmp"
+fi
+
+chown root:root "$tmp"
+chmod 644 "$tmp"
+mv -f "$tmp" "$HOSTS"
+trap - EXIT
+
+# Best effort: without a cache flush systemd-resolved keeps serving the old
+# answer until TTL expiry, which reads as "blocking doesn't work".
+if command -v resolvectl >/dev/null 2>&1; then
+  resolvectl flush-caches 2>/dev/null || true
+fi

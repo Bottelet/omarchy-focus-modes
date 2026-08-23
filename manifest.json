@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "bottelet.focus-modes",
+  "name": "Focus Modes",
+  "version": "1.0.0",
+  "author": "Casper Bottelet",
+  "license": "MIT",
+  "description": "iOS-style Focus modes for your desktop. One toggle applies a whole context — notifications off, distracting sites blocked, noisy apps quarantined, theme switch, keep-awake — and gives every bit of it back when the mode ends.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Focus Modes",
+    "description": "Mode chip: shows the active focus mode and its remaining time; click for mode cards",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "schema": [
+      {
+        "key": "showLabel",
+        "type": "boolean",
+        "label": "Show mode name",
+        "description": "Show the active mode's name and timer next to the icon (off = icon only)",
+        "default": true
+      },
+      {
+        "key": "scrollCycles",
+        "type": "boolean",
+        "label": "Scroll cycles modes",
+        "description": "Scrolling on the chip switches to the next/previous mode",
+        "default": false
+      },
+      {
+        "key": "notifyOnAutoRevert",
+        "type": "boolean",
+        "label": "Notify when a timer ends",
+        "description": "Send a notification when a timed mode expires and everything is restored",
+        "default": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+# Agent/session scratch, never part of the plugin.
+.omc/
+
+# Handover spec — a working document, not something an installer needs.
+SPEC.md
