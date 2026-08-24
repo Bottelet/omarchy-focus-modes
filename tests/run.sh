@@ -117,6 +117,25 @@ before=$(cat "$HOSTS")
 if run_helper --set example.com; then no "unbalanced markers refused"; else ok "unbalanced markers refused"; fi
 check "damaged file untouched" "$before" "$(cat "$HOSTS")"
 
+echo "== hosts helper: refuses untrusted install location =="
+# Same patches as above, plus force the trusted-self check to run even
+# unprivileged: the helper must refuse a copy whose path the user can write.
+TRUSTED="$WORK/trusted-check"
+sed -e "s|^HOSTS=/etc/hosts|HOSTS=$HOSTS|" \
+    -e "s|^\[\[ \${EUID} -eq 0 \]\]|true|" \
+    -e "s|^if \[\[ \${EUID} -eq 0 \]\]; then require_trusted_self; fi|require_trusted_self|" \
+    -e "s|^chown root:root|true chown|" \
+    "$PLUGIN/helpers/focus-modes-hosts" > "$TRUSTED"
+chmod +x "$TRUSTED"
+baseline
+if "$TRUSTED" --set example.com 2>"$WORK/stderr"; then
+  no "user-writable location refused"
+else
+  ok "user-writable location refused"
+fi
+if grep -q "not owned by root" "$WORK/stderr"; then ok "refusal names the cause"; else no "refusal names the cause" "$(cat "$WORK/stderr")"; fi
+if grep -q 'focus-modes' "$HOSTS"; then no "refused run leaves no block"; else ok "refused run leaves no block"; fi
+
 echo "== hosts helper: usage errors =="
 baseline
 run_helper --set && no "--set with no domains refused" || ok "--set with no domains refused"

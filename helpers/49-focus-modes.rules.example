@@ -1,6 +1,5 @@
 // Optional polkit rule: let your user toggle site blocking without a
-// password prompt. Edit USERNAME (and the path if your config lives
-// elsewhere), then install:
+// password prompt. Edit USERNAME, then install:
 //
 //   sudo install -m 644 49-focus-modes.rules.example /etc/polkit-1/rules.d/49-focus-modes.rules
 //
@@ -8,11 +7,12 @@
 //
 //   sudo rm /etc/polkit-1/rules.d/49-focus-modes.rules
 //
-// Scope: this authorizes exactly one program — the focus-modes hosts helper,
-// which can only rewrite its own marker block in /etc/hosts — for one user.
+// Scope: this authorizes exactly one program — the root-owned installed
+// copy of the focus-modes hosts helper (never the plugin checkout), which
+// can only rewrite its own marker block in /etc/hosts — for one user.
 polkit.addRule(function(action, subject) {
   if (action.id == "org.freedesktop.policykit.exec" &&
-      action.lookup("program") == "/home/USERNAME/.config/omarchy/plugins/bottelet.focus-modes/helpers/focus-modes-hosts" &&
+      action.lookup("program") == "/usr/local/bin/focus-modes-hosts" &&
       subject.user == "USERNAME" && subject.local && subject.active) {
     return polkit.Result.YES;
   }

@@ -362,19 +362,31 @@ function dndSetCommand(on) {
   return null
 }
 
+// The privileged helper is ONLY ever invoked at its root-owned installed
+// path — never from the plugin checkout, which the user (and therefore any
+// process running as the user) can rewrite between the polkit prompt and
+// the execution. The helper itself also refuses non-root-owned locations.
+var SYSTEM_HELPER = "/usr/local/bin/focus-modes-hosts"
+
+function systemHelperPath() { return SYSTEM_HELPER }
+
+// Setup probe: site blocking is skipped with a pointer to the README's
+// one-time `sudo install` when the immutable copy is missing.
+function helperCheckCommand() { return ["test", "-x", SYSTEM_HELPER] }
+
 // pkexec waits forever on an unanswered auth dialog; the engine runs steps
 // sequentially, so an abandoned prompt would wedge every later transition.
 // 120 s is plenty to type a password and finite enough to self-heal.
-function hostsSetArgv(helperPath, domains) {
-  var args = ["timeout", "120", "pkexec", helperPath, "--set"]
+function hostsSetArgv(domains) {
+  var args = ["timeout", "120", "pkexec", SYSTEM_HELPER, "--set"]
   for (var i = 0; i < domains.length && i < MAX_SITES; i++) {
     if (validDomain(domains[i])) args.push(String(domains[i]).toLowerCase())
   }
   return args.length > 5 ? args : null
 }
 
-function hostsClearArgv(helperPath) {
-  return ["timeout", "120", "pkexec", helperPath, "--clear"]
+function hostsClearArgv() {
+  return ["timeout", "120", "pkexec", SYSTEM_HELPER, "--clear"]
 }
 
 function hyprClientsCommand() { return ["hyprctl", "-j", "clients"] }
@@ -486,6 +498,8 @@ if (typeof module !== "undefined") {
     themeSetCommand: themeSetCommand,
     parseThemeList: parseThemeList,
     dndSetCommand: dndSetCommand,
+    systemHelperPath: systemHelperPath,
+    helperCheckCommand: helperCheckCommand,
     hostsSetArgv: hostsSetArgv,
     hostsClearArgv: hostsClearArgv,
     hyprClientsCommand: hyprClientsCommand,

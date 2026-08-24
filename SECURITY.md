@@ -18,7 +18,7 @@
 
 ## The hosts helper — the trust boundary
 
-`helpers/focus-modes-hosts` is ~120 lines of bash you can read in one sitting.
+`helpers/focus-modes-hosts` is ~150 lines of bash you can read in one sitting.
 Its only capabilities are: replace the content between its two marker lines
 (`# >>> bottelet.focus-modes >>>` / `# <<< bottelet.focus-modes <<<`) with
 validated `0.0.0.0` entries, or remove the block. By construction it cannot
@@ -26,6 +26,22 @@ touch anything outside the markers; if the markers are damaged or duplicated
 it refuses and tells you to fix the file by hand. Writes are
 temp-file + atomic rename, so a crash can never leave `/etc/hosts`
 half-written.
+
+**The privileged copy is immutable to the user.** pkexec executes whatever
+path it is given, so pointing it at a script inside the user-writable plugin
+checkout would let any process running as the user replace that script
+between the authorization prompt and the execution — the prompt would then
+bless attacker-controlled code as root. Therefore:
+
+- the copy in the plugin directory is never executed privileged; it exists to
+  be reviewed and installed;
+- the one-time setup installs it root-owned, mode 755, to
+  `/usr/local/bin/focus-modes-hosts`, and the UI only ever invokes that path;
+- the helper itself fail-closes: when running as root it verifies that its
+  own resolved path and containing directory are root-owned with no
+  group/other write bit, and refuses otherwise. A copy that never went
+  through `sudo install` is inert even if something coaxes pkexec into
+  running it.
 
 Validation happens **in the helper**, as root, not just in the UI:
 

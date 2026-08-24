@@ -9,6 +9,16 @@
 # Everything outside the two marker lines is copied through byte-for-byte.
 # Every domain is re-validated here, not just in the UI — this script is the
 # trust boundary, the panel is not.
+#
+# This script must be INSTALLED to a root-owned path before use:
+#
+#   sudo install -o root -g root -m 755 helpers/focus-modes-hosts /usr/local/bin/focus-modes-hosts
+#
+# pkexec executes whatever path it is given; authorizing a copy inside the
+# user-writable plugin directory would let any local process swap the script
+# between the prompt and the execution and run as root. The plugin therefore
+# only ever invokes /usr/local/bin/focus-modes-hosts, and the check below
+# makes the refusal fail-closed on this side too.
 set -euo pipefail
 
 # Deterministic case-folding and character classes regardless of what
@@ -22,7 +32,26 @@ MAX_DOMAINS=200
 
 fail() { echo "focus-modes-hosts: $*" >&2; exit 1; }
 
+# Refuse to do privileged work from any location the invoking user could
+# rewrite: both this file and its directory must be root-owned with no
+# group/other write bit. Dormant when not root, so the offline test suite
+# (which runs an unprivileged patched copy) is unaffected.
+require_trusted_self() {
+  local self p info owner mode g o
+  self=$(readlink -f "${BASH_SOURCE[0]}") || fail "cannot resolve own path"
+  for p in "$self" "$(dirname "$self")"; do
+    info=$(stat -c '%u %a' "$p" 2>/dev/null) || fail "cannot stat $p"
+    owner=${info%% *}
+    mode=${info##* }
+    g=${mode: -2:1}
+    o=${mode: -1}
+    [[ $owner == 0 ]] || fail "refusing to run from $p: not owned by root — install per README (sudo install -o root -g root -m 755 ... /usr/local/bin/focus-modes-hosts)"
+    [[ $g == [0145] && $o == [0145] ]] || fail "refusing to run from $p: writable by non-root — install per README"
+  done
+}
+
 [[ ${EUID} -eq 0 ]] || fail "must run as root (invoke via pkexec)"
+if [[ ${EUID} -eq 0 ]]; then require_trusted_self; fi
 [[ $# -ge 1 ]] || fail "usage: focus-modes-hosts --set <domain>... | --clear"
 
 mode=$1

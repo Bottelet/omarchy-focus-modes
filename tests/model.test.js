@@ -87,9 +87,12 @@ ok("theme: set builds argv", Array.isArray(M.themeSetCommand("tokyo-night")))
 ok("theme: option injection blocked", M.themeSetCommand("-rf") === null)
 ok("theme: newline blocked", M.themeSetCommand("a\nb") === null)
 
-const hosts = M.hostsSetArgv("/lib/helper", ["reddit.com", "bad host", "x.com"])
-eq("hosts: only valid domains in argv", ["timeout", "120", "pkexec", "/lib/helper", "--set", "reddit.com", "x.com"], hosts)
-ok("hosts: all-invalid -> null", M.hostsSetArgv("/lib/helper", ["bad host"]) === null)
+const hosts = M.hostsSetArgv(["reddit.com", "bad host", "x.com"])
+eq("hosts: only valid domains in argv",
+   ["timeout", "120", "pkexec", "/usr/local/bin/focus-modes-hosts", "--set", "reddit.com", "x.com"], hosts)
+ok("hosts: all-invalid -> null", M.hostsSetArgv(["bad host"]) === null)
+ok("hosts: only the system path is ever invoked",
+   M.hostsClearArgv().indexOf("/usr/local/bin/focus-modes-hosts") === 3 && M.systemHelperPath() === "/usr/local/bin/focus-modes-hosts")
 
 const clients = JSON.stringify([
   { address: "0xabc123", class: "discord", initialClass: "discord", workspace: { id: 2, name: "2" } },

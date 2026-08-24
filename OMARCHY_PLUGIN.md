@@ -58,6 +58,15 @@ Copy to `~/.config/omarchy/plugins/bottelet.focus-modes/`, then
 - **Hosts** — see SECURITY.md; privileged helper + pkexec. The Quattro shell
   registers its own polkit agent ("omarchy polkit agent registered" in its
   log), so the auth dialog renders natively.
+  *Marketplace security review (issue #1953) caught the load-bearing detail:*
+  pkexec must never be pointed at the user-writable plugin checkout — a
+  process running as the user could swap the script between the prompt and
+  the execution. The helper is therefore installed once (documented
+  `sudo install`) to root-owned `/usr/local/bin/focus-modes-hosts`; the UI
+  invokes only that path (with a `test -x` probe that turns a missing helper
+  into a "needs one-time setup" issue instead of a failed pkexec), and the
+  helper itself refuses to do privileged work when its own resolved path or
+  directory is not root-owned and non-group/other-writable.
 
 ## Decisions worth knowing
 

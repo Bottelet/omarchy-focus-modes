@@ -39,13 +39,34 @@ remaining time while a mode runs. Click it for the mode cards; keyboard-first
 (`←→` select, `↵` start, `1/2/3` = 25/50/90 min timer, `e` edit, `n` new
 mode, `Esc` close).
 
-### Site blocking and authorization
+### Site blocking and authorization (one-time setup)
 
-Blocking sites edits `/etc/hosts`, which needs root. The first action of a
-site-blocking mode runs a tiny audited helper
-(`helpers/focus-modes-hosts`) through `pkexec` — polkit shows an
-authorization prompt. Cancel it and the mode still applies its other actions;
-site blocking is simply skipped (the panel tells you).
+Blocking sites edits `/etc/hosts`, which needs root. The plugin does that
+through a tiny audited helper which **must be installed once to a root-owned
+path** — pkexec is never pointed at anything inside the (user-writable)
+plugin directory, because a script you can rewrite is a script any process
+running as you can rewrite between the prompt and the execution:
+
+```bash
+# review it first — ~150 lines of bash
+less ~/.config/omarchy/plugins/bottelet.focus-modes/helpers/focus-modes-hosts
+
+sudo install -o root -g root -m 755 \
+  ~/.config/omarchy/plugins/bottelet.focus-modes/helpers/focus-modes-hosts \
+  /usr/local/bin/focus-modes-hosts
+```
+
+The plugin only ever invokes `/usr/local/bin/focus-modes-hosts`, and the
+helper itself refuses to do privileged work from any path that is not
+root-owned and non-user-writable, so a copy that never went through
+`sudo install` is inert. Without the setup, modes still work; site blocking
+reports "needs one-time setup" and is skipped. Each block/unblock shows a
+polkit authorization prompt; cancel it and the mode still applies its other
+actions.
+
+Plugin updates never touch the installed helper. If a future release changes
+`helpers/focus-modes-hosts`, re-run the `sudo install` line (the README
+changelog will say so).
 
 `localhost`, `*.local`, `*.localhost` and this machine's own hostname can
 never be blocked — local development keeps working no matter what is on the
@@ -53,11 +74,12 @@ block list. Already-open tabs keep their existing connections; new lookups
 die. See `SECURITY.md` for the full threat model.
 
 **Optional: password-less toggling.** If the per-toggle prompt annoys you,
-install the provided polkit rule (edit the username first):
+install the provided polkit rule (edit the username first). It authorizes
+only the root-owned installed helper, never the plugin checkout:
 
 ```bash
 sudo install -m 644 helpers/49-focus-modes.rules.example /etc/polkit-1/rules.d/49-focus-modes.rules
-sudoedit /etc/polkit-1/rules.d/49-focus-modes.rules   # set your username/path
+sudoedit /etc/polkit-1/rules.d/49-focus-modes.rules   # set your username
 ```
 
 ## Keybinding
@@ -103,13 +125,14 @@ Removal checklist — everything the plugin ever touched:
 1. **End the active mode first** (click Off) so DND, theme, mute, windows and
    the hosts block are reverted by the engine itself.
 2. If you removed the plugin mid-mode, clean the hosts block manually:
-   `sudo /path/to/helpers/focus-modes-hosts --clear` — or delete the block
-   between `# >>> bottelet.focus-modes >>>` and
-   `# <<< bottelet.focus-modes <<<` in `/etc/hosts` by hand. Verify with
-   `grep focus-modes /etc/hosts` (should print nothing).
-3. If you installed the optional polkit rule:
+   `sudo focus-modes-hosts --clear` — or delete the block between
+   `# >>> bottelet.focus-modes >>>` and `# <<< bottelet.focus-modes <<<` in
+   `/etc/hosts` by hand. Verify with `grep focus-modes /etc/hosts` (should
+   print nothing).
+3. Remove the installed helper: `sudo rm /usr/local/bin/focus-modes-hosts`
+4. If you installed the optional polkit rule:
    `sudo rm /etc/polkit-1/rules.d/49-focus-modes.rules`
-4. State (modes, session log): `rm -rf ~/.local/state/omarchy-focus-modes`
+5. State (modes, session log): `rm -rf ~/.local/state/omarchy-focus-modes`
 
 ## Dependencies
 

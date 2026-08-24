@@ -28,7 +28,6 @@ Panel {
 
   readonly property string stateDir:
     (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/omarchy-focus-modes"
-  readonly property string helperPath: Qt.resolvedUrl("helpers/focus-modes-hosts").toString().replace("file://", "")
 
   property var modes: Model.sanitizeModes(null)
   property var journal: null          // active journal object, or null = Off
@@ -295,10 +294,19 @@ Panel {
     } })
 
     if (a.blockSites.enabled && a.blockSites.list.length > 0) {
-      var argv = Model.hostsSetArgv(helperPath, a.blockSites.list)
-      if (argv) enqueue({ argv: argv, cb: function(ok) {
-        if (ok) root.appendApplied({ module: "blockSites" })
-        else root.addIssue("Site blocking skipped (authorization failed or cancelled)")
+      // Only the immutable root-owned copy is ever handed to pkexec; the
+      // user-writable checkout copy exists solely to be reviewed and
+      // installed. Missing helper = one-time setup not done yet.
+      enqueue({ argv: Model.helperCheckCommand(), cb: function(present) {
+        if (!present) {
+          root.addIssue("Site blocking needs one-time setup — see README: sudo install the helper to " + Model.systemHelperPath())
+          return
+        }
+        var argv = Model.hostsSetArgv(a.blockSites.list)
+        if (argv) root.enqueue({ argv: argv, cb: function(ok) {
+          if (ok) root.appendApplied({ module: "blockSites" })
+          else root.addIssue("Site blocking skipped (authorization failed or cancelled)")
+        } })
       } })
     }
 
@@ -381,8 +389,8 @@ Panel {
           } })
           break
         case "blockSites":
-          enqueue({ argv: Model.hostsClearArgv(helperPath), cb: function(ok) {
-            if (!ok) root.addIssue("Could not clean /etc/hosts — run: pkexec " + root.helperPath + " --clear")
+          enqueue({ argv: Model.hostsClearArgv(), cb: function(ok) {
+            if (!ok) root.addIssue("Could not clean /etc/hosts — run: pkexec " + Model.systemHelperPath() + " --clear")
           } })
           break
         case "keepAwake":
@@ -1235,7 +1243,7 @@ Panel {
               Text {
                 visible: root.editSitesOn
                 width: parent.width
-                text: "Blocked via /etc/hosts (asks for authorization on start). localhost, *.local and this machine's own names can never be blocked."
+                text: "Blocked via /etc/hosts using the root-installed helper (one-time setup in README; polkit asks on each start). localhost, *.local and this machine's own names can never be blocked."
                 color: root.dim
                 font.family: root.fontName
                 font.pixelSize: Style.font.caption
